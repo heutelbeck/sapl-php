@@ -1,0 +1,44 @@
+{
+    "name": "sapl/sapl-php",
+    "description": "SAPL Policy Enforcement Point for PHP and Symfony. Streaming attribute-based access control against a SAPL Policy Decision Point over HTTP or RSocket.",
+    "type": "symfony-bundle",
+    "keywords": ["sapl", "abac", "authorization", "access-control", "pep", "symfony", "security"],
+    "homepage": "https://sapl.io",
+    "license": "Apache-2.0",
+    "require": {
+        "php": ">=8.3",
+        "psr/log": "^3.0",
+        "react/async": "^4.3",
+        "react/http": "^1.11",
+        "symfony/console": "^7.3",
+        "symfony/framework-bundle": "^7.3",
+        "symfony/http-client": "^7.3",
+        "symfony/security-bundle": "^7.3"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sapl\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sapl\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "stan": "phpstan analyse",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

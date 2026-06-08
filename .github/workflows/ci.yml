@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Lint, analyse, unit (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Check code style
+        run: composer cs-check
+
+      - name: Static analysis
+        run: composer stan
+
+      - name: Unit tests
+        run: vendor/bin/phpunit --testsuite unit
+
+  integration:
+    name: Integration tests (SAPL Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sapl-php
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: sapl-php
+
+      - name: Checkout sapl-policy-engine (4.1.0)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: heutelbeck/sapl-policy-engine
+          ref: 4.1.0
+          path: sapl-policy-engine
+
+      - name: Set up Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build SAPL Node image (ghcr.io/heutelbeck/sapl-node:4.1.0-SNAPSHOT)
+        working-directory: sapl-policy-engine
+        run: |
+          mvn -U -B install -pl sapl-node -am -Dmaven.test.skip=true
+          mvn -B spring-boot:build-image -pl sapl-node -Dmaven.test.skip=true
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        working-directory: sapl-php
+        run: composer install --no-interaction --no-progress
+
+      - name: Run integration tests
+        working-directory: sapl-php
+        run: vendor/bin/phpunit --testsuite integration
