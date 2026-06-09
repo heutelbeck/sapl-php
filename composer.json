@@ -11,6 +11,7 @@
         "react/async": "^4.3",
         "react/http": "^1.11",
         "symfony/console": "^7.3",
+        "symfony/expression-language": "^8.1",
         "symfony/framework-bundle": "^7.3",
         "symfony/http-client": "^7.3",
         "symfony/security-bundle": "^7.3"
@@ -32,7 +33,7 @@
     },
     "scripts": {
         "test": "phpunit",
-        "stan": "phpstan analyse",
+        "stan": "phpstan analyse --memory-limit=1G",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
         "cs-fix": "php-cs-fixer fix"
     },

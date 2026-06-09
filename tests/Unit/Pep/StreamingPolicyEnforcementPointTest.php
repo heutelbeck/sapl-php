@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sapl\Tests\Unit\Pep;
 
 use PHPUnit\Framework\TestCase;
+use React\Stream\ReadableStreamInterface;
 use React\Stream\ThroughStream;
 use Sapl\Api\AuthorizationDecision;
 use Sapl\Api\Decision;
@@ -100,6 +101,32 @@ final class StreamingPolicyEnforcementPointTest extends TestCase
         self::assertInstanceOf(Granted::class, $frames[0]);
         self::assertInstanceOf(SuspendedReason::class, $frames[1]);
         self::assertInstanceOf(Granted::class, $frames[2]);
+    }
+
+    public function testPauseRapDuringSuspendPausesOnSuspendAndResumesOnPermit(): void
+    {
+        $decisions = new ThroughStream();
+        $rap = $this->createMock(ReadableStreamInterface::class);
+        $rap->expects(self::once())->method('pause');
+        $rap->expects(self::exactly(2))->method('resume');
+        (new StreamingPolicyEnforcementPoint(new EnforcementPlanner([]), self::SIGNALS))
+            ->enforce($decisions, $rap, false, true);
+
+        $decisions->write(AuthorizationDecision::permit());
+        $decisions->write(new AuthorizationDecision(Decision::SUSPEND));
+        $decisions->write(AuthorizationDecision::permit());
+    }
+
+    public function testWithoutPauseFlagTheItemStreamIsNeverPaused(): void
+    {
+        $decisions = new ThroughStream();
+        $rap = $this->createMock(ReadableStreamInterface::class);
+        $rap->expects(self::never())->method('pause');
+        (new StreamingPolicyEnforcementPoint(new EnforcementPlanner([]), self::SIGNALS))
+            ->enforce($decisions, $rap, false, false);
+
+        $decisions->write(AuthorizationDecision::permit());
+        $decisions->write(new AuthorizationDecision(Decision::SUSPEND));
     }
 
     private function signalTransitions(): bool

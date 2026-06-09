@@ -16,10 +16,11 @@ use Attribute;
 final class StreamEnforce
 {
     public function __construct(
-        public readonly ?string $subject = null,
-        public readonly ?string $action = null,
-        public readonly ?string $resource = null,
+        public readonly mixed $subject = null,
+        public readonly mixed $action = null,
+        public readonly mixed $resource = null,
         public readonly mixed $environment = null,
+        public readonly mixed $secrets = null,
         public readonly bool $signalTransitions = false,
         public readonly bool $pauseRapDuringSuspend = false,
     ) {

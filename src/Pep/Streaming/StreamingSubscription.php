@@ -16,7 +16,9 @@ use Throwable;
  *
  * A value emission becomes a `data` event; a complete ends the output; a denial
  * errors and closes it; a boundary transition is written as data only when
- * transition signalling is enabled. Closing the output cancels the subscription.
+ * transition signalling is enabled. When pausing during suspend is enabled, a
+ * suspend boundary pauses the item stream and a resume boundary resumes it.
+ * Closing the output cancels the subscription.
  */
 final class StreamingSubscription
 {
@@ -28,6 +30,7 @@ final class StreamingSubscription
         private readonly ReadableStreamInterface $decisions,
         private readonly ReadableStreamInterface $rap,
         private readonly bool $signalTransitions,
+        private readonly bool $pauseRapDuringSuspend = false,
     ) {
         $this->out = new ThroughStream();
     }
@@ -73,12 +76,26 @@ final class StreamingSubscription
                 $this->finish();
             } elseif ($emission instanceof EmitError) {
                 $this->fail($emission->error);
-            } elseif ($emission instanceof EmitTransition && $this->signalTransitions) {
-                $this->out->write($emission->reason);
+            } elseif ($emission instanceof EmitTransition) {
+                $this->onTransition($emission);
             }
             if ($this->done) {
                 break;
             }
+        }
+    }
+
+    private function onTransition(EmitTransition $emission): void
+    {
+        if ($this->pauseRapDuringSuspend) {
+            if ($emission->reason instanceof SuspendedReason) {
+                $this->rap->pause();
+            } elseif ($emission->reason instanceof Granted) {
+                $this->rap->resume();
+            }
+        }
+        if ($this->signalTransitions) {
+            $this->out->write($emission->reason);
         }
     }
 

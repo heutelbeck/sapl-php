@@ -25,16 +25,20 @@ final class StreamingPolicyEnforcementPoint
     }
 
     /**
-     * @param ReadableStreamInterface $decisions a stream of {@see \Sapl\Api\AuthorizationDecision}
-     * @param ReadableStreamInterface $rap       the protected method's item stream
+     * @param ReadableStreamInterface $decisions             a stream of {@see \Sapl\Api\AuthorizationDecision}
+     * @param ReadableStreamInterface $rap                   the protected method's item stream
+     * @param bool                    $signalTransitions     write suspend/resume boundaries to the output
+     * @param bool                    $pauseRapDuringSuspend pause the item stream while suspended instead of
+     *                                                       letting it run and dropping items
      */
     public function enforce(
         ReadableStreamInterface $decisions,
         ReadableStreamInterface $rap,
         bool $signalTransitions = false,
+        bool $pauseRapDuringSuspend = false,
     ): ReadableStreamInterface {
         $driver = new StreamingEnforcementDriver($this->planner, $this->supportedSignals);
-        $subscription = new StreamingSubscription($driver, $decisions, $rap, $signalTransitions);
+        $subscription = new StreamingSubscription($driver, $decisions, $rap, $signalTransitions, $pauseRapDuringSuspend);
 
         return $subscription->start();
     }

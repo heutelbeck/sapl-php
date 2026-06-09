@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Sapl\Api;
 
 /**
- * A bundle of named authorization subscriptions for multi-decision requests.
+ * A collection of named authorization subscriptions for multi-decision requests.
  */
 final class MultiAuthorizationSubscription
 {

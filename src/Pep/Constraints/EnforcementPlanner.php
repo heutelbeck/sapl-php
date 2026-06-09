@@ -22,12 +22,15 @@ final class EnforcementPlanner
 {
     private const int SUBSTITUTE_PRIORITY = 0;
 
+    /** @var list<ConstraintHandlerProvider> */
+    private readonly array $providers;
+
     /**
-     * @param list<ConstraintHandlerProvider> $providers
+     * @param iterable<ConstraintHandlerProvider> $providers
      */
-    public function __construct(
-        private readonly array $providers,
-    ) {
+    public function __construct(iterable $providers)
+    {
+        $this->providers = is_array($providers) ? array_values($providers) : iterator_to_array($providers, false);
     }
 
     /**
