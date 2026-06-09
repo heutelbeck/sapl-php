@@ -24,6 +24,7 @@ enum SignalKind: string
     case COMPLETE = 'complete';
     case TERMINATION = 'termination';
     case SQL_QUERY = 'sql_query';
+    case MONGO_QUERY = 'mongo_query';
 
     /**
      * True when handlers attached here receive a value (mappers/consumers allowed).
@@ -31,7 +32,7 @@ enum SignalKind: string
     public function isValueCarrying(): bool
     {
         return match ($this) {
-            self::DECISION, self::INPUT, self::OUTPUT, self::ERROR, self::SQL_QUERY => true,
+            self::DECISION, self::INPUT, self::OUTPUT, self::ERROR, self::SQL_QUERY, self::MONGO_QUERY => true,
             self::CANCEL, self::COMPLETE, self::TERMINATION => false,
         };
     }

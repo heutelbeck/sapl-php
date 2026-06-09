@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sapl\Symfony;
 
+use Doctrine\ODM\MongoDB\Query\Filter\BsonFilter;
+use Doctrine\ORM\Query\Filter\SQLFilter;
 use Reflector;
 use Sapl\Pdp\Http\HttpPdpClient;
 use Sapl\Pdp\Http\HttpPdpClientOptions;
@@ -13,6 +15,10 @@ use Sapl\Pep\BlockingPolicyEnforcementPoint;
 use Sapl\Pep\Constraints\ConstraintHandlerProvider;
 use Sapl\Pep\Constraints\EnforcementPlanner;
 use Sapl\Pep\Constraints\Providers\ContentFilteringProvider;
+use Sapl\Pep\Constraints\Providers\MongoQueryRewritingProvider;
+use Sapl\Pep\Constraints\Providers\SqlQueryRewritingProvider;
+use Sapl\Pep\Constraints\ShimSignalRegistry;
+use Sapl\Pep\Constraints\SignalKind;
 use Sapl\Pep\Streaming\StreamingPolicyEnforcementPoint;
 use Sapl\Symfony\Proxy\SaplInterceptor;
 use Sapl\Symfony\Proxy\SaplServiceProxyPass;
@@ -20,6 +26,7 @@ use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Loader\Configurator\DefaultsConfigurator;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\tagged_iterator;
@@ -106,6 +113,9 @@ final class SaplBundle extends AbstractBundle
 
         $services->set(ContentFilteringProvider::class);
 
+        $this->registerSqlShim($services);
+        $this->registerMongoShim($services);
+
         $services->set(TokenStorageSubjectResolver::class);
         $services->alias(SubjectResolver::class, TokenStorageSubjectResolver::class);
         $services->set(ExpressionLanguage::class);
@@ -118,5 +128,37 @@ final class SaplBundle extends AbstractBundle
         $services->set(EnforcementControllerSubscriber::class);
         $services->set(AccessDeniedExceptionListener::class);
         $services->set(SaplInterceptor::class);
+    }
+
+    /**
+     * Register the SQL query-rewriting shim when Doctrine ORM is installed. The
+     * provider is tagged as a constraint handler, and the SQL_QUERY signal is
+     * advertised so the planner admits a sql:queryRewriting obligation rather than
+     * failing it closed. The SaplSqlFilter is registered and enabled in the
+     * application's Doctrine configuration, since the bundle cannot edit it.
+     */
+    private function registerSqlShim(DefaultsConfigurator $services): void
+    {
+        if (!class_exists(SQLFilter::class)) {
+            return;
+        }
+        $services->set(SqlQueryRewritingProvider::class);
+        ShimSignalRegistry::register(SignalKind::SQL_QUERY);
+    }
+
+    /**
+     * Register the Mongo query-rewriting shim when Doctrine ODM is installed. The
+     * provider is tagged as a constraint handler, and the MONGO_QUERY signal is
+     * advertised so the planner admits a mongo:queryRewriting obligation rather
+     * than failing it closed. The SaplBsonFilter is registered and enabled in the
+     * application's Doctrine ODM configuration, since the bundle cannot edit it.
+     */
+    private function registerMongoShim(DefaultsConfigurator $services): void
+    {
+        if (!class_exists(BsonFilter::class)) {
+            return;
+        }
+        $services->set(MongoQueryRewritingProvider::class);
+        ShimSignalRegistry::register(SignalKind::MONGO_QUERY);
     }
 }

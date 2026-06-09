@@ -43,7 +43,7 @@ final class SaplInterceptor
         if ($pre instanceof PreEnforce) {
             $subscription = $this->builder->forInvocation($pre, $class, $method, $this->namedArgs($reflection, $args));
 
-            return $this->pep->preEnforce($subscription, EnforcementSignals::PRE, new MethodInvocation($args, $proceed(...)));
+            return $this->pep->preEnforce($subscription, EnforcementSignals::pre(), new MethodInvocation($args, $proceed(...)));
         }
 
         $post = $this->attribute($reflection, PostEnforce::class);

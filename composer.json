@@ -11,15 +11,22 @@
         "react/async": "^4.3",
         "react/http": "^1.11",
         "symfony/console": "^7.3",
-        "symfony/expression-language": "^8.1",
+        "symfony/expression-language": "^7.3",
         "symfony/framework-bundle": "^7.3",
         "symfony/http-client": "^7.3",
         "symfony/security-bundle": "^7.3"
     },
     "require-dev": {
+        "doctrine/mongodb-odm": "^2.16",
+        "doctrine/orm": "^3.6",
         "friendsofphp/php-cs-fixer": "^3.64",
         "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^11.5"
+        "phpunit/phpunit": "^11.5",
+        "testcontainers/testcontainers": "^0.2.0"
+    },
+    "suggest": {
+        "doctrine/mongodb-odm": "Enables the mongo:queryRewriting shim that narrows the documents a PreEnforce-protected method reads, via a Doctrine ODM BsonFilter.",
+        "doctrine/orm": "Enables the sql:queryRewriting shim that narrows the rows a PreEnforce-protected method reads, via a Doctrine ORM SQLFilter."
     },
     "autoload": {
         "psr-4": {

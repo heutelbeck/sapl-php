@@ -58,7 +58,7 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
                         static fn (array $args): mixed => $original(...$args),
                     );
 
-                    return $this->pep->preEnforce($subscription, EnforcementSignals::PRE, $invocation);
+                    return $this->pep->preEnforce($subscription, EnforcementSignals::pre(), $invocation);
                 },
             );
 

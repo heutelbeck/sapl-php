@@ -7,6 +7,7 @@ namespace Sapl\Pep;
 use Sapl\Api\AuthorizationSubscription;
 use Sapl\Api\Decision;
 use Sapl\Pdp\PolicyDecisionPoint;
+use Sapl\Pep\Constraints\ActivePlan;
 use Sapl\Pep\Constraints\EnforcementPlan;
 use Sapl\Pep\Constraints\EnforcementPlanner;
 use Sapl\Pep\Constraints\SignalKind;
@@ -60,9 +61,25 @@ final class BlockingPolicyEnforcementPoint
                 throw new AccessDeniedException(self::ERROR_PRE_INVOCATION_OBLIGATION_FAILED);
             }
 
-            return $this->enforceOutput($plan, $invocation->proceed(), false);
+            return $this->enforceOutput($plan, $this->proceed($plan, $invocation), false);
         } catch (Throwable $throwable) {
             throw $this->enforceError($plan, $throwable);
+        }
+    }
+
+    /**
+     * Invoke the protected method with the plan published to {@see ActivePlan},
+     * so a data-layer shim fired inside the method can discharge its signal. The
+     * plan is reset in all cases, including a throwing method, so a long-lived
+     * worker never leaks a stale plan into the next request.
+     */
+    private function proceed(EnforcementPlan $plan, MethodInvocation $invocation): mixed
+    {
+        ActivePlan::set($plan);
+        try {
+            return $invocation->proceed();
+        } finally {
+            ActivePlan::reset();
         }
     }
 

@@ -11,6 +11,8 @@ use Sapl\Api\AuthorizationSubscription;
 use Sapl\Api\Decision;
 use Sapl\Pep\AccessDeniedException;
 use Sapl\Pep\BlockingPolicyEnforcementPoint;
+use Sapl\Pep\Constraints\ActivePlan;
+use Sapl\Pep\Constraints\EnforcementPlan;
 use Sapl\Pep\Constraints\EnforcementPlanner;
 use Sapl\Pep\Constraints\Mapper;
 use Sapl\Pep\Constraints\Runner;
@@ -144,6 +146,33 @@ final class BlockingPolicyEnforcementPointTest extends TestCase
 
         self::assertInstanceOf(RuntimeException::class, $thrown);
         self::assertSame('wrapped', $thrown->getMessage());
+    }
+
+    public function testPreEnforcePublishesActivePlanDuringProceedAndResetsAfter(): void
+    {
+        $during = false;
+        $result = $this->pep(AuthorizationDecision::permit())->preEnforce(
+            $this->subscription(),
+            self::PRE_SIGNALS,
+            $this->invocation([], function () use (&$during): string {
+                $during = ActivePlan::get() instanceof EnforcementPlan;
+
+                return 'ok';
+            }),
+        );
+
+        self::assertTrue($during);
+        self::assertSame('ok', $result);
+        self::assertNull(ActivePlan::get());
+    }
+
+    public function testPreEnforceResetsActivePlanWhenProceedThrows(): void
+    {
+        $invocation = $this->invocation([], static fn () => throw new RuntimeException('boom'));
+
+        $this->capture(fn () => $this->pep(AuthorizationDecision::permit())->preEnforce($this->subscription(), self::PRE_SIGNALS, $invocation));
+
+        self::assertNull(ActivePlan::get());
     }
 
     public function testPostEnforcePermitReturnsValue(): void

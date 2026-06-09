@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sapl\Symfony;
 
+use Sapl\Pep\Constraints\ShimSignalRegistry;
 use Sapl\Pep\Constraints\SignalKind;
 
 /**
@@ -23,5 +24,17 @@ final class EnforcementSignals
 
     private function __construct()
     {
+    }
+
+    /**
+     * The PreEnforce supported set: the static base unioned with the signals of
+     * any registered data-layer shim. PostEnforce and streaming are not shim cut
+     * points, so their sets stay fixed and a shim signal never enters them.
+     *
+     * @return list<SignalKind>
+     */
+    public static function pre(): array
+    {
+        return [...self::PRE, ...ShimSignalRegistry::shimSignals()];
     }
 }

@@ -87,6 +87,35 @@ final class EnforcementPlannerTest extends TestCase
         self::assertFalse($plan->execute(SignalKind::DECISION, new Present('d'), false)->failureState);
     }
 
+    public function testShimSignalMapperIsAdmittedWhenSignalIsSupported(): void
+    {
+        $provider = new FakeConstraintHandlerProvider('sql', [
+            new ScopedHandler(new Mapper(static fn (mixed $v): mixed => $v), SignalKind::SQL_QUERY, 30),
+        ]);
+        $decision = new AuthorizationDecision(Decision::PERMIT, [['type' => 'sql']]);
+        $supported = [...self::SUPPORTED, SignalKind::SQL_QUERY];
+
+        $plan = (new EnforcementPlanner([$provider]))->plan($decision, $supported);
+
+        // Admitted: scheduled on SQL_QUERY, the DECISION signal carries no failure.
+        self::assertFalse($plan->execute(SignalKind::DECISION, new Present('d'), false)->failureState);
+        self::assertCount(1, $plan->entriesFor(SignalKind::SQL_QUERY));
+    }
+
+    public function testShimSignalObligationFailsClosedWhenSignalUnsupported(): void
+    {
+        $provider = new FakeConstraintHandlerProvider('sql', [
+            new ScopedHandler(new Mapper(static fn (mixed $v): mixed => $v), SignalKind::SQL_QUERY, 30),
+        ]);
+        $decision = new AuthorizationDecision(Decision::PERMIT, [['type' => 'sql']]);
+
+        // SQL_QUERY not in the supported set: inadmissible, fails closed on DECISION.
+        $plan = (new EnforcementPlanner([$provider]))->plan($decision, self::SUPPORTED);
+
+        self::assertTrue($plan->execute(SignalKind::DECISION, new Present('d'), false)->failureState);
+        self::assertSame([], $plan->entriesFor(SignalKind::SQL_QUERY));
+    }
+
     public function testResourceSubstitutionMapsOutputToResource(): void
     {
         $decision = AuthorizationDecision::withResource(Decision::PERMIT, [], [], 'the-resource');
