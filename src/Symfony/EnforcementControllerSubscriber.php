@@ -47,6 +47,7 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
         }
         [$class, $method] = $this->controllerClassMethod($event->getController());
         $original = $event->getController();
+        /** @var array<string, mixed> $namedArguments */
         $namedArguments = $event->getNamedArguments();
 
         if (null !== $pre) {
