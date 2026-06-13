@@ -58,7 +58,7 @@ final class StreamingEnforcementDriverTest extends TestCase
 
     public function testDenyStillEnforcesDecisionScopedObligation(): void
     {
-        $ran      = false;
+        $ran = false;
         $decision = new AuthorizationDecision(Decision::DENY, [['type' => 'audit']]);
         $provider = new FakeConstraintHandlerProvider('audit', [
             new ScopedHandler(new Runner(static function () use (&$ran): void {
@@ -73,7 +73,7 @@ final class StreamingEnforcementDriverTest extends TestCase
 
     public function testSuspendStillEnforcesDecisionScopedObligation(): void
     {
-        $ran      = false;
+        $ran = false;
         $decision = new AuthorizationDecision(Decision::SUSPEND, [['type' => 'audit']]);
         $provider = new FakeConstraintHandlerProvider('audit', [
             new ScopedHandler(new Runner(static function () use (&$ran): void {

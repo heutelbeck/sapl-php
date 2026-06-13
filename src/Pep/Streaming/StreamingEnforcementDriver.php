@@ -45,9 +45,9 @@ final class StreamingEnforcementDriver
      */
     public function onDecision(AuthorizationDecision $decision): array
     {
-        $plan   = $this->planner->plan($decision, $this->supportedSignals);
+        $plan = $this->planner->plan($decision, $this->supportedSignals);
         $failed = $plan->execute(SignalKind::DECISION, new Present($decision), false)->failureState;
-        $event  = match ($decision->decision) {
+        $event = match ($decision->decision) {
             Decision::PERMIT => $failed
                 ? new PdpDeny($decision, $plan, DenyKind::PERMIT_NOT_ENFORCEABLE)
                 : new PdpPermit($decision, $plan),
