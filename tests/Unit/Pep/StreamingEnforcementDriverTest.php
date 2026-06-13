@@ -56,6 +56,36 @@ final class StreamingEnforcementDriverTest extends TestCase
         self::assertTrue($driver->isTerminated());
     }
 
+    public function testDenyStillEnforcesDecisionScopedObligation(): void
+    {
+        $ran      = false;
+        $decision = new AuthorizationDecision(Decision::DENY, [['type' => 'audit']]);
+        $provider = new FakeConstraintHandlerProvider('audit', [
+            new ScopedHandler(new Runner(static function () use (&$ran): void {
+                $ran = true;
+            }), SignalKind::DECISION, 0),
+        ]);
+        $driver = $this->driver($provider);
+
+        self::assertSame(['error'], $this->tags($driver->onDecision($decision)));
+        self::assertTrue($ran, 'decision-scoped obligation handler must run before the deny');
+    }
+
+    public function testSuspendStillEnforcesDecisionScopedObligation(): void
+    {
+        $ran      = false;
+        $decision = new AuthorizationDecision(Decision::SUSPEND, [['type' => 'audit']]);
+        $provider = new FakeConstraintHandlerProvider('audit', [
+            new ScopedHandler(new Runner(static function () use (&$ran): void {
+                $ran = true;
+            }), SignalKind::DECISION, 0),
+        ]);
+        $driver = $this->driver($provider);
+
+        self::assertSame(['suspended'], $this->tags($driver->onDecision($decision)));
+        self::assertTrue($ran, 'decision-scoped obligation handler must run on suspend');
+    }
+
     public function testIndeterminateDeniesWithIndeterminateMessage(): void
     {
         $driver = $this->driver();

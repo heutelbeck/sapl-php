@@ -6,7 +6,6 @@ namespace Sapl\Pep\Streaming;
 
 use Sapl\Api\AuthorizationDecision;
 use Sapl\Api\Decision;
-use Sapl\Pep\Constraints\EnforcementPlan;
 use Sapl\Pep\Constraints\EnforcementPlanner;
 use Sapl\Pep\Constraints\SignalKind;
 use Sapl\Pep\EnforcementResult;
@@ -46,9 +45,12 @@ final class StreamingEnforcementDriver
      */
     public function onDecision(AuthorizationDecision $decision): array
     {
-        $plan = $this->planner->plan($decision, $this->supportedSignals);
-        $event = match ($decision->decision) {
-            Decision::PERMIT => $this->classifyPermit($decision, $plan),
+        $plan   = $this->planner->plan($decision, $this->supportedSignals);
+        $failed = $plan->execute(SignalKind::DECISION, new Present($decision), false)->failureState;
+        $event  = match ($decision->decision) {
+            Decision::PERMIT => $failed
+                ? new PdpDeny($decision, $plan, DenyKind::PERMIT_NOT_ENFORCEABLE)
+                : new PdpPermit($decision, $plan),
             Decision::SUSPEND => new PdpSuspend($decision, $plan),
             Decision::DENY => new PdpDeny($decision, $plan, DenyKind::POLICY_DENIED),
             Decision::INDETERMINATE => new PdpDeny($decision, $plan, DenyKind::INDETERMINATE),
@@ -100,15 +102,6 @@ final class StreamingEnforcementDriver
     public function onCancel(): array
     {
         return $this->apply(Cancel::instance());
-    }
-
-    private function classifyPermit(AuthorizationDecision $decision, EnforcementPlan $plan): Event
-    {
-        $failed = $plan->execute(SignalKind::DECISION, new Present($decision), false)->failureState;
-
-        return $failed
-            ? new PdpDeny($decision, $plan, DenyKind::PERMIT_NOT_ENFORCEABLE)
-            : new PdpPermit($decision, $plan);
     }
 
     /**
