@@ -6,6 +6,7 @@ namespace Sapl\Symfony;
 
 use Sapl\Pep\BlockingPolicyEnforcementPoint;
 use Sapl\Pep\MethodInvocation;
+use Sapl\Pep\TransactionProvider;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -26,6 +27,7 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
         private readonly BlockingPolicyEnforcementPoint $pep,
         private readonly AuthorizationSubscriptionBuilder $builder,
         private readonly StreamEnforcer $streamEnforcer,
+        private readonly TransactionProvider $transactionProvider,
     ) {
     }
 
@@ -59,7 +61,9 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
                         static fn (array $args): mixed => $original(...$args),
                     );
 
-                    return $this->pep->preEnforce($subscription, EnforcementSignals::pre(), $invocation);
+                    return $this->transactionProvider->transactional(
+                        fn (): mixed => $this->pep->preEnforce($subscription, EnforcementSignals::pre(), $invocation),
+                    );
                 },
             );
 
@@ -82,10 +86,14 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
 
         $event->setController(
             function (mixed ...$arguments) use ($original, $post, $class, $method, $namedArguments): mixed {
-                $result = $original(...$arguments);
-                $subscription = $this->builder->forResult($post, $class, $method, $result, $namedArguments);
+                return $this->transactionProvider->transactional(
+                    function () use ($original, $post, $class, $method, $namedArguments, $arguments): mixed {
+                        $result = $original(...$arguments);
+                        $subscription = $this->builder->forResult($post, $class, $method, $result, $namedArguments);
 
-                return $this->pep->postEnforce($subscription, EnforcementSignals::POST, $result);
+                        return $this->pep->postEnforce($subscription, EnforcementSignals::POST, $result);
+                    },
+                );
             },
         );
     }

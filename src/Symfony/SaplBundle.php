@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Sapl\Symfony;
 
 use Doctrine\ODM\MongoDB\Query\Filter\BsonFilter;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\Filter\SQLFilter;
 use Reflector;
+use Sapl\Doctrine\Orm\DoctrineTransactionProvider;
 use Sapl\Pdp\Http\HttpPdpClient;
 use Sapl\Pdp\Http\HttpPdpClientOptions;
 use Sapl\Pdp\PolicyDecisionPoint;
@@ -19,7 +21,9 @@ use Sapl\Pep\Constraints\Providers\MongoQueryRewritingProvider;
 use Sapl\Pep\Constraints\Providers\SqlQueryRewritingProvider;
 use Sapl\Pep\Constraints\ShimSignalRegistry;
 use Sapl\Pep\Constraints\SignalKind;
+use Sapl\Pep\NoTransactionProvider;
 use Sapl\Pep\Streaming\StreamingPolicyEnforcementPoint;
+use Sapl\Pep\TransactionProvider;
 use Sapl\Symfony\Proxy\SaplInterceptor;
 use Sapl\Symfony\Proxy\SaplServiceProxyPass;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -64,6 +68,7 @@ final class SaplBundle extends AbstractBundle
     {
         $definition->rootNode()
             ->children()
+                ->booleanNode('transactional')->defaultFalse()->end()
                 ->arrayNode('pdp')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -115,6 +120,7 @@ final class SaplBundle extends AbstractBundle
 
         $this->registerSqlShim($services);
         $this->registerMongoShim($services);
+        $this->registerTransactionProvider($services, (bool) ($config['transactional'] ?? false));
 
         $services->set(TokenStorageSubjectResolver::class);
         $services->alias(SubjectResolver::class, TokenStorageSubjectResolver::class);
@@ -160,5 +166,25 @@ final class SaplBundle extends AbstractBundle
         }
         $services->set(MongoQueryRewritingProvider::class);
         ShimSignalRegistry::register(SignalKind::MONGO_QUERY);
+    }
+
+    /**
+     * Wire the transaction provider that the interception layer wraps every
+     * enforced invocation in. The default is the inert {@see NoTransactionProvider},
+     * so behavior is unchanged unless an application opts in. When `sapl.transactional`
+     * is set and Doctrine ORM is installed, the Doctrine-backed provider takes over,
+     * giving every PreEnforce and PostEnforce invocation a transaction boundary that
+     * rolls back when enforcement denies after the protected method has written.
+     */
+    private function registerTransactionProvider(DefaultsConfigurator $services, bool $transactional): void
+    {
+        $services->set(NoTransactionProvider::class);
+        $services->alias(TransactionProvider::class, NoTransactionProvider::class);
+
+        if (!$transactional || !interface_exists(EntityManagerInterface::class)) {
+            return;
+        }
+        $services->set(DoctrineTransactionProvider::class);
+        $services->alias(TransactionProvider::class, DoctrineTransactionProvider::class);
     }
 }

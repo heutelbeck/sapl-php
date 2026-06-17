@@ -7,6 +7,7 @@ namespace Sapl\Symfony\Proxy;
 use ReflectionMethod;
 use Sapl\Pep\BlockingPolicyEnforcementPoint;
 use Sapl\Pep\MethodInvocation;
+use Sapl\Pep\TransactionProvider;
 use Sapl\Symfony\AuthorizationSubscriptionBuilder;
 use Sapl\Symfony\EnforcementSignals;
 use Sapl\Symfony\PostEnforce;
@@ -27,6 +28,7 @@ final class SaplInterceptor
         private readonly BlockingPolicyEnforcementPoint $pep,
         private readonly AuthorizationSubscriptionBuilder $builder,
         private readonly StreamEnforcer $streamEnforcer,
+        private readonly TransactionProvider $transactionProvider,
     ) {
     }
 
@@ -43,15 +45,21 @@ final class SaplInterceptor
         if ($pre instanceof PreEnforce) {
             $subscription = $this->builder->forInvocation($pre, $class, $method, $this->namedArgs($reflection, $args));
 
-            return $this->pep->preEnforce($subscription, EnforcementSignals::pre(), new MethodInvocation($args, $proceed(...)));
+            return $this->transactionProvider->transactional(
+                fn (): mixed => $this->pep->preEnforce($subscription, EnforcementSignals::pre(), new MethodInvocation($args, $proceed(...))),
+            );
         }
 
         $post = $this->attribute($reflection, PostEnforce::class);
         if ($post instanceof PostEnforce) {
-            $result = $proceed($args);
-            $subscription = $this->builder->forResult($post, $class, $method, $result, $this->namedArgs($reflection, $args));
+            return $this->transactionProvider->transactional(
+                function () use ($class, $method, $args, $proceed, $post, $reflection): mixed {
+                    $result = $proceed($args);
+                    $subscription = $this->builder->forResult($post, $class, $method, $result, $this->namedArgs($reflection, $args));
 
-            return $this->pep->postEnforce($subscription, EnforcementSignals::POST, $result);
+                    return $this->pep->postEnforce($subscription, EnforcementSignals::POST, $result);
+                },
+            );
         }
 
         $stream = $this->attribute($reflection, StreamEnforce::class);
