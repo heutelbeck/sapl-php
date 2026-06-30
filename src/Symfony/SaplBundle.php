@@ -97,15 +97,15 @@ final class SaplBundle extends AbstractBundle
         $services->set('sapl.pdp_client_options', HttpPdpClientOptions::class)
             ->autowire(false)
             ->args([
-                $pdp['base_url'] ?? '',
-                $pdp['token'] ?? null,
-                $pdp['username'] ?? null,
-                $pdp['secret'] ?? null,
-                null,
-                $pdp['timeout'] ?? HttpPdpClientOptions::DEFAULT_TIMEOUT_SECONDS,
-                BackoffPolicy::DEFAULT_BASE_SECONDS,
-                BackoffPolicy::DEFAULT_CAP_SECONDS,
-                $pdp['verify_peer'] ?? true,
+                '$baseUrl' => $pdp['base_url'] ?? '',
+                '$token' => $pdp['token'] ?? null,
+                '$username' => $pdp['username'] ?? null,
+                '$secret' => $pdp['secret'] ?? null,
+                '$timeoutSeconds' => $pdp['timeout'] ?? HttpPdpClientOptions::DEFAULT_TIMEOUT_SECONDS,
+                '$streamInactivityTimeoutSeconds' => HttpPdpClientOptions::DEFAULT_STREAM_INACTIVITY_TIMEOUT_SECONDS,
+                '$retryBaseDelaySeconds' => BackoffPolicy::DEFAULT_BASE_SECONDS,
+                '$retryMaxDelaySeconds' => BackoffPolicy::DEFAULT_CAP_SECONDS,
+                '$verifyPeer' => $pdp['verify_peer'] ?? true,
             ]);
 
         $services->set(HttpPdpClient::class)

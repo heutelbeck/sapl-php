@@ -9,6 +9,8 @@ use Sapl\Pdp\PolicyDecisionPoint;
 use Sapl\Symfony\SaplBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
@@ -26,6 +28,22 @@ final class SaplTestKernel extends Kernel
     public function registerBundles(): iterable
     {
         return [new FrameworkBundle(), new SaplBundle()];
+    }
+
+    public function build(ContainerBuilder $container): void
+    {
+        parent::build($container);
+        // Keep the PDP client options definition reachable for the wiring test:
+        // the fake PDP replaces HttpPdpClient, so the options would otherwise be
+        // removed as unused.
+        $container->addCompilerPass(new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+                if ($container->hasDefinition('sapl.pdp_client_options')) {
+                    $container->getDefinition('sapl.pdp_client_options')->setPublic(true);
+                }
+            }
+        });
     }
 
     public function getCacheDir(): string

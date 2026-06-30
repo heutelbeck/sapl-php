@@ -6,6 +6,8 @@ namespace Sapl\Tests\Integration;
 
 use React\Stream\ThroughStream;
 use Sapl\Api\AuthorizationDecision;
+use Sapl\Pdp\Http\HttpPdpClientOptions;
+use Sapl\Pdp\Reconnect\BackoffPolicy;
 use Sapl\Pep\AccessDeniedException;
 use Sapl\Symfony\Proxy\SaplProxyMarker;
 use Sapl\Tests\Integration\Kernel\ConfigurableFakePdp;
@@ -44,6 +46,24 @@ final class SaplBundleKernelTest extends KernelTestCase
     public function testPreEnforcePermitRunsTheController(): void
     {
         self::assertSame(200, $this->handle('/pre', AuthorizationDecision::permit())->getStatusCode());
+    }
+
+    /**
+     * The bundle must wire HttpPdpClientOptions so each value reaches the matching
+     * constructor parameter. A positional drift silently scrambles the streaming
+     * inactivity timeout (to a backoff value), which terminally denies a quiet
+     * decision stream. Pin every shifted slot.
+     */
+    public function testPdpClientOptionsAreWiredToTheCorrectConstructorSlots(): void
+    {
+        self::bootKernel(['debug' => false]);
+        $options = self::getContainer()->get('sapl.pdp_client_options');
+
+        self::assertInstanceOf(HttpPdpClientOptions::class, $options);
+        self::assertSame(HttpPdpClientOptions::DEFAULT_STREAM_INACTIVITY_TIMEOUT_SECONDS, $options->streamInactivityTimeoutSeconds);
+        self::assertSame(BackoffPolicy::DEFAULT_BASE_SECONDS, $options->retryBaseDelaySeconds);
+        self::assertSame(BackoffPolicy::DEFAULT_CAP_SECONDS, $options->retryMaxDelaySeconds);
+        self::assertTrue($options->verifyPeer);
     }
 
     public function testPreEnforceDenyIsForbidden(): void
