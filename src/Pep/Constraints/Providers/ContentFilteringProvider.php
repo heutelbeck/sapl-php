@@ -13,7 +13,9 @@ use Sapl\Pep\Constraints\SignalKind;
 /**
  * Built-in provider for `filterJsonContent` obligations. Schedules an output
  * mapper at priority 0 that applies the configured blacken / replace / delete
- * actions to the method's result via {@see ContentFilter}.
+ * actions to the method's result via {@see ContentFilter}. An optional
+ * `conditions` predicate gates the actions per element: matching elements are
+ * transformed, non-matching elements pass through unchanged.
  */
 final class ContentFilteringProvider implements ConstraintHandlerProvider
 {
@@ -30,10 +32,11 @@ final class ContentFilteringProvider implements ConstraintHandlerProvider
             return [];
         }
         $actions = array_values($actionsRaw);
+        $conditions = $constraint['conditions'] ?? [];
 
         return [
             new ScopedHandler(
-                new Mapper(static fn (mixed $value): mixed => ContentFilter::apply($actions, $value)),
+                new Mapper(static fn (mixed $value): mixed => ContentFilter::apply($actions, $value, $conditions)),
                 SignalKind::OUTPUT,
                 self::PRIORITY,
             ),

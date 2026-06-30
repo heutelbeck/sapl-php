@@ -48,6 +48,8 @@ final class HttpPdpClient implements PolicyDecisionPoint
     private readonly StreamingHttpTransport $streamingTransport;
     private readonly ?TokenProvider $tokenProvider;
     private readonly ?string $staticAuthorization;
+    private readonly float $streamFirstItemTimeoutSeconds;
+    private readonly float $streamInactivityTimeoutSeconds;
 
     /** @var array<string, string> route value to fully qualified URL */
     private readonly array $urls;
@@ -73,6 +75,8 @@ final class HttpPdpClient implements PolicyDecisionPoint
         $this->streamingTransport = $streamingTransport ?? new ReactStreamingHttpTransport(verifyPeer: $options->verifyPeer);
         $this->tokenProvider = $options->tokenProvider;
         $this->staticAuthorization = $this->buildStaticAuthorization($options);
+        $this->streamFirstItemTimeoutSeconds = $options->timeoutSeconds;
+        $this->streamInactivityTimeoutSeconds = $options->streamInactivityTimeoutSeconds;
         $this->urls = $this->buildUrls($options->baseUrl);
     }
 
@@ -85,12 +89,12 @@ final class HttpPdpClient implements PolicyDecisionPoint
 
     public function multiDecideAllOnce(MultiAuthorizationSubscription $subscription): MultiAuthorizationDecision
     {
-        $raw = $this->requestUnary($this->urls[PdpRoute::MULTI_DECIDE_ALL_ONCE->value], $subscription->toArray());
-        if (null === $raw) {
+        $body = $this->requestUnaryRaw($this->urls[PdpRoute::MULTI_DECIDE_ALL_ONCE->value], $subscription->toArray());
+        if (null === $body) {
             return new MultiAuthorizationDecision();
         }
 
-        return $this->parser->parseMulti($raw) ?? new MultiAuthorizationDecision();
+        return $this->parser->parseMultiJson($body) ?? new MultiAuthorizationDecision();
     }
 
     public function decide(AuthorizationSubscription $subscription): ReadableStreamInterface
@@ -149,7 +153,26 @@ final class HttpPdpClient implements PolicyDecisionPoint
     /**
      * @param array<string, mixed> $body
      */
-    private function requestUnary(string $url, array $body, bool $retried = false): mixed
+    private function requestUnary(string $url, array $body): mixed
+    {
+        $raw = $this->requestUnaryRaw($url, $body);
+        if (null === $raw) {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+        if (JSON_ERROR_NONE !== json_last_error()) {
+            $this->logger->error('sapl.pdp_response_not_json', ['url' => $url]);
+
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function requestUnaryRaw(string $url, array $body, bool $retried = false): ?string
     {
         $json = json_encode($body);
         if (false === $json) {
@@ -169,19 +192,13 @@ final class HttpPdpClient implements PolicyDecisionPoint
             if ((401 === $response->statusCode || 403 === $response->statusCode)
                 && $this->invalidateToken()
                 && !$retried) {
-                return $this->requestUnary($url, $body, true);
+                return $this->requestUnaryRaw($url, $body, true);
             }
 
             return null;
         }
-        $decoded = json_decode($response->body, true);
-        if (JSON_ERROR_NONE !== json_last_error()) {
-            $this->logger->error('sapl.pdp_response_not_json', ['url' => $url]);
 
-            return null;
-        }
-
-        return $decoded;
+        return $response->body;
     }
 
     /**
@@ -203,6 +220,8 @@ final class HttpPdpClient implements PolicyDecisionPoint
             function (): void {
                 $this->invalidateToken();
             },
+            $this->streamFirstItemTimeoutSeconds,
+            $this->streamInactivityTimeoutSeconds,
         );
 
         return $reconnector->start();

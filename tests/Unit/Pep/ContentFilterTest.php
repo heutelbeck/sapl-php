@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sapl\Tests\Unit\Pep;
 
 use PHPUnit\Framework\TestCase;
+use Sapl\Pep\AccessDeniedException;
 use Sapl\Pep\Constraints\Mapper;
 use Sapl\Pep\Constraints\Providers\ContentFilter;
 use Sapl\Pep\Constraints\Providers\ContentFilteringProvider;
@@ -63,31 +64,31 @@ final class ContentFilterTest extends TestCase
         self::assertSame(['profile' => ['email' => 'hidden', 'name' => 'A']], $result);
     }
 
-    public function testUnsupportedPathSyntaxIsIgnored(): void
+    public function testDeniesWhenPathSyntaxIsUnsupported(): void
     {
         $value = ['items' => [['x' => 1]]];
 
-        $result = ContentFilter::apply([['type' => 'delete', 'path' => '$.items[0].x']], $value);
+        $this->expectException(AccessDeniedException::class);
 
-        self::assertSame($value, $result);
+        ContentFilter::apply([['type' => 'delete', 'path' => '$.items[0].x']], $value);
     }
 
-    public function testForbiddenKeyIsIgnored(): void
+    public function testDeniesWhenPathTargetsForbiddenKey(): void
     {
         $value = ['__proto__' => 'keep'];
 
-        $result = ContentFilter::apply([['type' => 'delete', 'path' => '$.__proto__']], $value);
+        $this->expectException(AccessDeniedException::class);
 
-        self::assertSame($value, $result);
+        ContentFilter::apply([['type' => 'delete', 'path' => '$.__proto__']], $value);
     }
 
-    public function testBlackenLeavesNonStringValuesUnchanged(): void
+    public function testDeniesWhenBlackenTargetIsNotTextual(): void
     {
         $value = ['count' => 42];
 
-        $result = ContentFilter::apply([['type' => 'blacken', 'path' => '$.count']], $value);
+        $this->expectException(AccessDeniedException::class);
 
-        self::assertSame($value, $result);
+        ContentFilter::apply([['type' => 'blacken', 'path' => '$.count']], $value);
     }
 
     public function testProviderClaimsFilterJsonContentOnOutput(): void

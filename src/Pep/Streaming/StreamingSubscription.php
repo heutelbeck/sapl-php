@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sapl\Pep\Streaming;
 
+use LogicException;
 use React\Stream\ReadableStreamInterface;
 use React\Stream\ThroughStream;
 use Sapl\Api\AuthorizationDecision;
@@ -22,8 +23,11 @@ use Throwable;
  */
 final class StreamingSubscription
 {
+    private const string ERROR_PDP_STREAM_COMPLETED = 'PDP decision stream completed unexpectedly; a streaming PDP must not complete.';
+
     private readonly ThroughStream $out;
     private bool $done = false;
+    private bool $sawDecision = false;
 
     public function __construct(
         private readonly StreamingEnforcementDriver $driver,
@@ -39,11 +43,15 @@ final class StreamingSubscription
     {
         $this->decisions->on('data', function (mixed $decision): void {
             if ($decision instanceof AuthorizationDecision) {
+                $this->sawDecision = true;
                 $this->render($this->driver->onDecision($decision));
             }
         });
         $this->decisions->on('error', function (Throwable $error): void {
             $this->render($this->driver->onPdpError($error));
+        });
+        $this->decisions->on('end', function (): void {
+            $this->onPdpComplete();
         });
         $this->rap->on('data', function (mixed $item): void {
             $this->render($this->driver->onItem($item));
@@ -59,6 +67,20 @@ final class StreamingSubscription
         });
 
         return $this->out;
+    }
+
+    /**
+     * A streaming PDP decision stream is contractually infinite; PDP clients own
+     * reconnection. A completion reaching the PEP therefore means a defective PDP:
+     * an empty stream is coerced to a single terminating DENY, and any completion
+     * is reported as a PDP error so the protected stream fails closed.
+     */
+    private function onPdpComplete(): void
+    {
+        if (!$this->sawDecision) {
+            $this->render($this->driver->onDecision(AuthorizationDecision::deny()));
+        }
+        $this->render($this->driver->onPdpError(new LogicException(self::ERROR_PDP_STREAM_COMPLETED)));
     }
 
     /**

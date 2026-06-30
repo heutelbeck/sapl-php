@@ -33,6 +33,7 @@ final class SymfonyHttpTransport implements UnaryHttpTransport
                 'headers' => $headers,
                 'body' => $body,
                 'timeout' => $this->timeoutSeconds,
+                'max_duration' => $this->timeoutSeconds,
             ]);
             $statusCode = $response->getStatusCode();
             $content = $response->getContent(false);

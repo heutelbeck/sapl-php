@@ -55,6 +55,36 @@ final class DecisionParser
         return new AuthorizationDecision($decision, $obligations, $advice);
     }
 
+    /**
+     * Decode a multi-decision response from its raw JSON body, rejecting a
+     * repeated subscription id fail-closed. A duplicate id is an error, never a
+     * last-wins merge, so a later PERMIT can never erase an earlier DENY for the
+     * same id. Duplicate top-level keys are lost once the body is run through
+     * json_decode, so the check works on the raw text before decoding.
+     */
+    public function parseMultiJson(string $json): ?MultiAuthorizationDecision
+    {
+        $entryCount = $this->countTopLevelObjectEntries($json);
+        if (null === $entryCount) {
+            $this->logger->warning('sapl.multi_response_not_object');
+
+            return null;
+        }
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            $this->logger->warning('sapl.multi_response_not_object');
+
+            return null;
+        }
+        if ($entryCount !== count($decoded)) {
+            $this->logger->warning('sapl.multi_response_duplicate_subscription_id');
+
+            return null;
+        }
+
+        return $this->parseMulti($decoded);
+    }
+
     public function parseMulti(mixed $raw): ?MultiAuthorizationDecision
     {
         if (!is_array($raw)) {
@@ -88,6 +118,76 @@ final class DecisionParser
             $subscriptionId,
             $this->parseDecision($raw['decision'] ?? null),
         );
+    }
+
+    /**
+     * Count the entries of the root JSON object including any with a repeated
+     * key, so a duplicate can be detected by comparing against the unique-keyed
+     * count produced by json_decode. Returns null when the payload is not a JSON
+     * object. Nested objects and arrays are skipped; only root keys are counted.
+     */
+    private function countTopLevelObjectEntries(string $json): ?int
+    {
+        $length = strlen($json);
+        $i = 0;
+        while ($i < $length && ctype_space($json[$i])) {
+            ++$i;
+        }
+        if ($i >= $length || '{' !== $json[$i]) {
+            return null;
+        }
+        ++$i;
+        $depth = 1;
+        $atKey = true;
+        $count = 0;
+        while ($i < $length) {
+            $char = $json[$i];
+            if ('"' === $char) {
+                if (1 === $depth && $atKey) {
+                    ++$count;
+                    $atKey = false;
+                }
+                $i = $this->skipString($json, $i, $length);
+
+                continue;
+            }
+            if ('{' === $char || '[' === $char) {
+                ++$depth;
+            } elseif ('}' === $char || ']' === $char) {
+                --$depth;
+                if (0 === $depth) {
+                    return $count;
+                }
+            } elseif (',' === $char && 1 === $depth) {
+                $atKey = true;
+            }
+            ++$i;
+        }
+
+        return null;
+    }
+
+    /**
+     * Advance past a JSON string starting at the opening quote, honouring
+     * backslash escapes, and return the index just after the closing quote.
+     */
+    private function skipString(string $json, int $index, int $length): int
+    {
+        $i = $index + 1;
+        while ($i < $length) {
+            $char = $json[$i];
+            if ('\\' === $char) {
+                $i += 2;
+
+                continue;
+            }
+            if ('"' === $char) {
+                return $i + 1;
+            }
+            ++$i;
+        }
+
+        return $length;
     }
 
     /**

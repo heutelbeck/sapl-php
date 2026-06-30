@@ -17,6 +17,7 @@ use Sapl\Pdp\Reconnect\BackoffPolicy;
 final class HttpPdpClientOptions
 {
     public const float DEFAULT_TIMEOUT_SECONDS = 5.0;
+    public const float DEFAULT_STREAM_INACTIVITY_TIMEOUT_SECONDS = 60.0;
 
     public function __construct(
         public readonly string $baseUrl,
@@ -25,6 +26,7 @@ final class HttpPdpClientOptions
         public readonly ?string $secret = null,
         public readonly ?TokenProvider $tokenProvider = null,
         public readonly float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
+        public readonly float $streamInactivityTimeoutSeconds = self::DEFAULT_STREAM_INACTIVITY_TIMEOUT_SECONDS,
         public readonly float $retryBaseDelaySeconds = BackoffPolicy::DEFAULT_BASE_SECONDS,
         public readonly float $retryMaxDelaySeconds = BackoffPolicy::DEFAULT_CAP_SECONDS,
         public readonly bool $verifyPeer = true,

@@ -7,6 +7,7 @@ namespace Sapl\Pdp\Http;
 use Closure;
 use Psr\Log\LoggerInterface;
 use React\EventLoop\Loop;
+use React\EventLoop\TimerInterface;
 use React\Stream\ReadableStreamInterface;
 use React\Stream\ThroughStream;
 use Sapl\Pdp\Http\Transport\StreamingHttpTransport;
@@ -18,10 +19,11 @@ use Throwable;
  * Drives one streaming subscription against the resilience contract: never
  * terminate on a transport condition.
  *
- * A transport error, an HTTP error status, an SSE buffer overflow, or a server
- * graceful completion all seed INDETERMINATE and reconnect with bounded
- * exponential backoff, forever. Consecutive equal emissions are suppressed. The
- * subscription ends only when the consumer closes the returned stream.
+ * A transport error, an HTTP error status, an SSE buffer overflow, a server
+ * graceful completion, or a silent stall past the inactivity window all seed
+ * INDETERMINATE and reconnect with bounded exponential backoff, forever.
+ * Consecutive equal emissions are suppressed. The subscription ends only when
+ * the consumer closes the returned stream.
  */
 final class StreamReconnector
 {
@@ -32,12 +34,15 @@ final class StreamReconnector
     private bool $closed = false;
     private bool $reconnecting = false;
     private ?ReadableStreamInterface $bodyStream = null;
+    private ?TimerInterface $livenessTimer = null;
 
     /**
      * @param array<string, string>   $headers
-     * @param Closure(mixed): ?object $parse         decode one SSE frame, or null to skip it
-     * @param Closure(): list<object> $seed          INDETERMINATE values emitted across a gap
-     * @param Closure(): void         $onAuthFailure invoked on HTTP 401/403 to invalidate a token
+     * @param Closure(mixed): ?object $parse                    decode one SSE frame, or null on a decode failure that fails stale
+     * @param Closure(): list<object> $seed                     INDETERMINATE values emitted across a gap
+     * @param Closure(): void         $onAuthFailure            invoked on HTTP 401/403 to invalidate a token
+     * @param float                   $firstItemTimeoutSeconds  silence allowed before the first frame arrives
+     * @param float                   $inactivityTimeoutSeconds silence allowed between frames once streaming
      */
     public function __construct(
         private readonly StreamingHttpTransport $transport,
@@ -49,6 +54,8 @@ final class StreamReconnector
         private readonly Closure $parse,
         private readonly Closure $seed,
         private readonly Closure $onAuthFailure,
+        private readonly float $firstItemTimeoutSeconds,
+        private readonly float $inactivityTimeoutSeconds,
     ) {
         $this->out = new ThroughStream();
     }
@@ -57,6 +64,7 @@ final class StreamReconnector
     {
         $this->out->on('close', function (): void {
             $this->closed = true;
+            $this->cancelLiveness();
             $this->bodyStream?->close();
             $this->bodyStream = null;
         });
@@ -110,6 +118,7 @@ final class StreamReconnector
 
         $sse = new SseFrameParser();
         $this->bodyStream = $response->body;
+        $this->armLiveness($this->firstItemTimeoutSeconds);
         $response->body->on('data', function (string $chunk) use ($sse): void {
             $this->onChunk($sse, $chunk);
         });
@@ -124,6 +133,9 @@ final class StreamReconnector
 
     private function onChunk(SseFrameParser $sse, string $chunk): void
     {
+        // Any byte from the server, including a keep-alive comment frame that
+        // yields no decision, proves the socket is alive and resets the window.
+        $this->armLiveness($this->inactivityTimeoutSeconds);
         try {
             $frames = $sse->push($chunk);
         } catch (SseBufferOverflowException) {
@@ -135,7 +147,16 @@ final class StreamReconnector
         foreach ($frames as $raw) {
             $item = ($this->parse)($raw);
             if (null === $item) {
-                continue;
+                // A frame that decodes as JSON but cannot be interpreted as a
+                // decision is a fail-stale condition: surface INDETERMINATE via
+                // the seed and reconnect, rather than dropping it and leaving
+                // the consumer on the previous (possibly PERMIT) decision.
+                $this->logger->error('sapl.pdp_streaming_decode_error', ['url' => $this->url]);
+                $this->bodyStream?->close();
+                $this->bodyStream = null;
+                $this->scheduleReconnect();
+
+                return;
             }
             $this->attempt = 0;
             $this->emit($item);
@@ -147,6 +168,7 @@ final class StreamReconnector
         if ($this->closed || $this->reconnecting) {
             return;
         }
+        $this->cancelLiveness();
         $this->reconnecting = true;
         ++$this->attempt;
         $delay = $this->backoff->delayForAttempt($this->attempt);
@@ -161,6 +183,34 @@ final class StreamReconnector
         Loop::addTimer($delay, function (): void {
             $this->connect();
         });
+    }
+
+    private function armLiveness(float $seconds): void
+    {
+        $this->cancelLiveness();
+        $this->livenessTimer = Loop::addTimer($seconds, function (): void {
+            $this->onInactivityTimeout();
+        });
+    }
+
+    private function cancelLiveness(): void
+    {
+        if (null !== $this->livenessTimer) {
+            Loop::cancelTimer($this->livenessTimer);
+            $this->livenessTimer = null;
+        }
+    }
+
+    private function onInactivityTimeout(): void
+    {
+        $this->livenessTimer = null;
+        $this->logger->warning('sapl.pdp_streaming_inactivity_timeout', [
+            'url' => $this->url,
+            'timeout' => round($this->inactivityTimeoutSeconds, 3),
+        ]);
+        $this->bodyStream?->close();
+        $this->bodyStream = null;
+        $this->scheduleReconnect();
     }
 
     private function emit(object $item): void

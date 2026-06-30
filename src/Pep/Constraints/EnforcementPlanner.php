@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Sapl\Pep\Constraints;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use RuntimeException;
 use Sapl\Api\AuthorizationDecision;
 use Sapl\Pep\AccessDeniedException;
 
@@ -25,12 +28,15 @@ final class EnforcementPlanner
     /** @var list<ConstraintHandlerProvider> */
     private readonly array $providers;
 
+    private readonly LoggerInterface $logger;
+
     /**
      * @param iterable<ConstraintHandlerProvider> $providers
      */
-    public function __construct(iterable $providers)
+    public function __construct(iterable $providers, ?LoggerInterface $logger = null)
     {
         $this->providers = is_array($providers) ? array_values($providers) : iterator_to_array($providers, false);
+        $this->logger    = $logger ?? new NullLogger();
     }
 
     /**
@@ -79,7 +85,7 @@ final class EnforcementPlanner
     {
         $claims = [];
         foreach ($this->providers as $provider) {
-            $claim = $provider->getConstraintHandlers($constraint, $supportedSignals);
+            $claim = $this->claimHandlers($provider, $constraint, $supportedSignals);
             if ([] !== $claim) {
                 $claims[] = $claim;
             }
@@ -108,6 +114,29 @@ final class EnforcementPlanner
         }
 
         return $assignments;
+    }
+
+    /**
+     * A throwing provider is treated as a no-claim, so a malformed constraint the
+     * provider cannot parse fails closed via the synthetic substitute instead of
+     * escaping plan() as a raw exception.
+     *
+     * @param list<SignalKind> $supportedSignals
+     *
+     * @return list<ScopedHandler>
+     */
+    private function claimHandlers(ConstraintHandlerProvider $provider, mixed $constraint, array $supportedSignals): array
+    {
+        try {
+            return $provider->getConstraintHandlers($constraint, $supportedSignals);
+        } catch (RuntimeException $exception) {
+            $this->logger->warning(
+                'Constraint handler provider {provider} failed to resolve a handler; treating as unresolved: {message}',
+                ['provider' => $provider::class, 'message' => $exception->getMessage()],
+            );
+
+            return [];
+        }
     }
 
     /**
