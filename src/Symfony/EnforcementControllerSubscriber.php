@@ -84,6 +84,27 @@ final class EnforcementControllerSubscriber implements EventSubscriberInterface
             return;
         }
 
+        $this->enforcePost($event, $original, $class, $method, $namedArguments);
+    }
+
+    /**
+     * @param array<string, mixed> $namedArguments
+     */
+    private function enforcePost(
+        ControllerArgumentsEvent $event,
+        callable $original,
+        string $class,
+        string $method,
+        array $namedArguments,
+    ): void {
+        // Re-resolved in this scope so $post is a plain PostEnforce|null the guard
+        // narrows directly, rather than a value whose non-nullness is deduced across
+        // branches in the caller (a narrowing not carried into the closure captures).
+        $post = $event->getAttributes(PostEnforce::class)[0] ?? null;
+        if (null === $post) {
+            return;
+        }
+
         $event->setController(
             function (mixed ...$arguments) use ($original, $post, $class, $method, $namedArguments): mixed {
                 return $this->transactionProvider->transactional(
