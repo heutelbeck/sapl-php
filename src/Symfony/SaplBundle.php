@@ -110,7 +110,13 @@ final class SaplBundle extends AbstractBundle
 
         $services->set(HttpPdpClient::class)
             ->autowire(false)
-            ->args([service('sapl.pdp_client_options')]);
+            ->args([
+                '$options' => service('sapl.pdp_client_options'),
+                // Inject the application logger so the PDP resilience paths (reconnect,
+                // liveness timeout, fail-closed) are observable; falls back to the
+                // client's own NullLogger when the app has no logger service.
+                '$logger' => service('logger')->nullOnInvalid(),
+            ]);
         $services->alias(PolicyDecisionPoint::class, HttpPdpClient::class);
 
         $services->set(EnforcementPlanner::class)
