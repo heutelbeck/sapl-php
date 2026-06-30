@@ -1,0 +1,72 @@
+name: Release to Packagist
+
+# A release is cut by pushing a semantic-version tag (e.g. v1.0.0). This workflow
+# validates the tagged commit (code style, static analysis, unit + integration
+# tests) and creates a GitHub Release. Packagist publishes the new version from
+# the tag automatically via its GitHub App / webhook integration, so there is no
+# registry push step and no token in CI. If validation fails the tag is deleted
+# so the broken version does not stick (Packagist drops a version when its tag is
+# removed).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: '8.4'
+          extensions: mongodb, pdo_pgsql, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Pull SAPL Node image
+        run: docker pull ghcr.io/heutelbeck/sapl-node:4.1.2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Check code style
+        run: composer cs-check
+
+      - name: Static analysis
+        run: composer stan
+
+      - name: Unit tests
+        run: vendor/bin/phpunit --testsuite unit
+
+      - name: Integration tests
+        run: vendor/bin/phpunit --testsuite integration
+
+      - name: Delete tag on failure
+        if: failure()
+        run: git push --delete origin "$GITHUB_REF_NAME"
+
+  release:
+    name: GitHub release
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes

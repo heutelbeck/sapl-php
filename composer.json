@@ -5,6 +5,17 @@
     "keywords": ["sapl", "abac", "authorization", "access-control", "pep", "symfony", "security"],
     "homepage": "https://sapl.io",
     "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Dominic Heutelbeck",
+            "email": "dominic@heutelbeck.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/heutelbeck/sapl-php/issues",
+        "source": "https://github.com/heutelbeck/sapl-php"
+    },
     "require": {
         "php": ">=8.3",
         "psr/log": "^3.0",
