@@ -22,7 +22,7 @@ jobs:
       matrix:
         php: ['8.3', '8.4']
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
@@ -49,29 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sapl-php
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: sapl-php
 
-      - name: Checkout sapl-policy-engine (4.1.0)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: heutelbeck/sapl-policy-engine
-          ref: 4.1.0
-          path: sapl-policy-engine
-
-      - name: Set up Java
-        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-
-      - name: Build SAPL Node image (ghcr.io/heutelbeck/sapl-node:4.1.0-SNAPSHOT)
-        working-directory: sapl-policy-engine
-        run: |
-          mvn -U -B install -pl sapl-node -am -Dmaven.test.skip=true
-          mvn -B spring-boot:build-image -pl sapl-node -Dmaven.test.skip=true
+      - name: Pull SAPL Node image
+        run: docker pull ghcr.io/heutelbeck/sapl-node:4.1.2
 
       - name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2

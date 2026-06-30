@@ -14,7 +14,7 @@ use Throwable;
  */
 final class SaplNode
 {
-    public const string IMAGE = 'ghcr.io/heutelbeck/sapl-node:4.1.0-SNAPSHOT';
+    public const string IMAGE = 'ghcr.io/heutelbeck/sapl-node:4.1.2';
 
     private string $containerId = '';
     private readonly int $httpPort;
