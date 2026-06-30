@@ -81,8 +81,8 @@ final class ContentFilterTest extends TestCase
      */
     public function testDoesNotLeakSensitiveFieldOfObjectPayload(): void
     {
-        $user       = new stdClass();
-        $user->ssn  = self::SSN;
+        $user = new stdClass();
+        $user->ssn = self::SSN;
         $user->name = 'Alice';
 
         $result = ContentFilter::apply([['type' => 'blacken', 'path' => '$.ssn']], $user);
@@ -97,7 +97,7 @@ final class ContentFilterTest extends TestCase
     public function testDeniesWhenBlackenOutputExceedsMaximumLength(): void
     {
         $longReplacement = str_repeat('x', 1000);
-        $longTarget      = str_repeat('a', 1001);
+        $longTarget = str_repeat('a', 1001);
 
         $this->expectException(AccessDeniedException::class);
 

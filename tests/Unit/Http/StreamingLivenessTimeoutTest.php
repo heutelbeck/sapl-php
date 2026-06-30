@@ -112,6 +112,7 @@ final class StreamingLivenessTimeoutTest extends TestCase
      * into $snapshot so a test can assert the stream's state mid-flight.
      *
      * @param list<array{0: float, 1: callable(): void}> $schedule offset seconds to action
+     * @param list<Decision>                             $snapshot verbs seen up to $snapshotAt
      *
      * @return list<Decision>
      */

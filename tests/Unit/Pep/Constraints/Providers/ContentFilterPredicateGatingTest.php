@@ -24,9 +24,9 @@ final class ContentFilterPredicateGatingTest extends TestCase
     public function testRedactsOnlyRecordsMatchingTheCondition(): void
     {
         $constraint = [
-            'type'       => 'filterJsonContent',
+            'type' => 'filterJsonContent',
             'conditions' => [['path' => '$.role', 'type' => '==', 'value' => 'admin']],
-            'actions'    => [['type' => 'delete', 'path' => '$.salary']],
+            'actions' => [['type' => 'delete', 'path' => '$.salary']],
         ];
 
         $result = $this->filter($constraint, [
@@ -40,11 +40,6 @@ final class ContentFilterPredicateGatingTest extends TestCase
         ], $result);
     }
 
-    /**
-     * @param int|string $conditionValue
-     * @param int|string $matchingValue
-     * @param int|string $nonMatchingValue
-     */
     #[DataProvider('comparisonOperatorCases')]
     public function testOperatorGatesTransformationPerElement(
         string $operator,
@@ -54,9 +49,9 @@ final class ContentFilterPredicateGatingTest extends TestCase
         int|string $nonMatchingValue,
     ): void {
         $constraint = [
-            'type'       => 'filterJsonContent',
+            'type' => 'filterJsonContent',
             'conditions' => [['path' => '$.'.$field, 'type' => $operator, 'value' => $conditionValue]],
-            'actions'    => [['type' => 'delete', 'path' => '$.salary']],
+            'actions' => [['type' => 'delete', 'path' => '$.salary']],
         ];
 
         $result = $this->filter($constraint, [
@@ -87,12 +82,12 @@ final class ContentFilterPredicateGatingTest extends TestCase
     public function testConjunctiveConditionsRequireEveryPredicateToMatch(): void
     {
         $constraint = [
-            'type'       => 'filterJsonContent',
+            'type' => 'filterJsonContent',
             'conditions' => [
                 ['path' => '$.role', 'type' => '==', 'value' => 'admin'],
                 ['path' => '$.dept', 'type' => '==', 'value' => 'hr'],
             ],
-            'actions'    => [['type' => 'delete', 'path' => '$.salary']],
+            'actions' => [['type' => 'delete', 'path' => '$.salary']],
         ];
 
         $result = $this->filter($constraint, [
@@ -109,9 +104,9 @@ final class ContentFilterPredicateGatingTest extends TestCase
     public function testNumericEqualityComparesExactValueBeyondDoublePrecision(): void
     {
         $constraint = [
-            'type'       => 'filterJsonContent',
+            'type' => 'filterJsonContent',
             'conditions' => [['path' => '$.id', 'type' => '==', 'value' => 9007199254740993]],
-            'actions'    => [['type' => 'delete', 'path' => '$.salary']],
+            'actions' => [['type' => 'delete', 'path' => '$.salary']],
         ];
 
         $result = $this->filter($constraint, [
@@ -128,9 +123,9 @@ final class ContentFilterPredicateGatingTest extends TestCase
     public function testDeniesWhenConditionPathIsAbsentFromThePayload(): void
     {
         $constraint = [
-            'type'       => 'filterJsonContent',
+            'type' => 'filterJsonContent',
             'conditions' => [['path' => '$.role', 'type' => '==', 'value' => 'admin']],
-            'actions'    => [['type' => 'delete', 'path' => '$.salary']],
+            'actions' => [['type' => 'delete', 'path' => '$.salary']],
         ];
         $mapper = $this->mapperOf($constraint);
 

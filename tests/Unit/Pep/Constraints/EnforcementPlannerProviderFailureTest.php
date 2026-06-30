@@ -57,7 +57,7 @@ final class EnforcementPlannerProviderFailureTest extends TestCase
 
     public function testValidObligationIsStillEnforcedWhenAnotherProviderThrows(): void
     {
-        $logRan       = false;
+        $logRan = false;
         $logObligation = new FakeConstraintHandlerProvider('log', [
             new ScopedHandler(new Runner(static function () use (&$logRan): void {
                 $logRan = true;
@@ -65,7 +65,7 @@ final class EnforcementPlannerProviderFailureTest extends TestCase
         ]);
         $decision = new AuthorizationDecision(Decision::PERMIT, [['type' => 'malformed'], ['type' => 'log']]);
 
-        $plan   = (new EnforcementPlanner([$this->throwingProvider('malformed'), $logObligation]))->plan($decision, self::SUPPORTED);
+        $plan = (new EnforcementPlanner([$this->throwingProvider('malformed'), $logObligation]))->plan($decision, self::SUPPORTED);
         $result = $plan->execute(SignalKind::DECISION, new Present('d'), false);
 
         self::assertTrue($result->failureState);

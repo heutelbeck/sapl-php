@@ -36,7 +36,7 @@ final class EnforcementPlanner
     public function __construct(iterable $providers, ?LoggerInterface $logger = null)
     {
         $this->providers = is_array($providers) ? array_values($providers) : iterator_to_array($providers, false);
-        $this->logger    = $logger ?? new NullLogger();
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**

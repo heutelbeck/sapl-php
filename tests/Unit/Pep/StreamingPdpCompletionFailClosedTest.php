@@ -16,7 +16,7 @@ use Throwable;
  * A streaming PDP decision stream is contractually infinite. If it completes,
  * the PEP must treat the PDP as defective and fail closed rather than letting
  * the protected stream run on under a stale grant. An empty decision stream
- * must be coerced to a single terminating DENY. (fsm-pdp-complete-not-failclosed)
+ * must be coerced to a single terminating DENY. (fsm-pdp-complete-not-failclosed).
  */
 final class StreamingPdpCompletionFailClosedTest extends TestCase
 {

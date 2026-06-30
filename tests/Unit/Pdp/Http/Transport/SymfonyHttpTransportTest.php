@@ -61,6 +61,9 @@ final class SymfonyHttpTransportTest extends TestCase
         $transport = new SymfonyHttpTransport(self::BUDGET_SECONDS, $client);
         $transport->send('POST', 'http://localhost:8443/api/pdp/decide-once', [], '{}');
 
-        return $captured;
+        /** @var array<string, mixed> $options */
+        $options = $captured;
+
+        return $options;
     }
 }
