@@ -1,6 +1,6 @@
 {
     "name": "sapl/sapl-php",
-    "description": "SAPL Policy Enforcement Point for PHP and Symfony. Streaming attribute-based access control against a SAPL Policy Decision Point over HTTP or RSocket.",
+    "description": "SAPL Policy Enforcement Point for PHP and Symfony. Streaming attribute-based access control against a SAPL Policy Decision Point over HTTP.",
     "type": "symfony-bundle",
     "keywords": ["sapl", "abac", "authorization", "access-control", "pep", "symfony", "security"],
     "homepage": "https://sapl.io",
