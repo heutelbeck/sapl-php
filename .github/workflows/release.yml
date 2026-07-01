@@ -2,11 +2,11 @@ name: Release to Packagist
 
 # A release is cut by pushing a semantic-version tag (e.g. v1.0.0). This workflow
 # validates the tagged commit (code style, static analysis, unit + integration
-# tests) and creates a GitHub Release. Packagist publishes the new version from
-# the tag automatically via its GitHub App / webhook integration, so there is no
-# registry push step and no token in CI. If validation fails the tag is deleted
-# so the broken version does not stick (Packagist drops a version when its tag is
-# removed).
+# tests). Packagist publishes the new version from the tag automatically via its
+# GitHub App / webhook integration, so there is no registry push step and no token
+# in CI. If validation fails the tag is deleted so the broken version does not
+# stick (Packagist drops a version when its tag is removed). The GitHub Release,
+# when wanted, is created by hand so its notes can be written.
 
 on:
   push:
@@ -58,15 +58,3 @@ jobs:
       - name: Delete tag on failure
         if: failure()
         run: git push --delete origin "$GITHUB_REF_NAME"
-
-  release:
-    name: GitHub release
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
