@@ -38,7 +38,9 @@ final class SaplServiceProxyPass implements CompilerPassInterface
                 continue;
             }
 
-            $definition->setClass($generator->generate($class));
+            $proxyClass = $generator->generate($class);
+            $definition->setClass($proxyClass);
+            $definition->setFile($container->getReflectionClass($proxyClass)?->getFileName() ?: null);
             $definition->addMethodCall('__saplInit', [new Reference(SaplInterceptor::class)]);
         }
     }
