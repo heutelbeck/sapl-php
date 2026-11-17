@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Sapl\Api\AuthorizationDecision;
+use Sapl\Api\Decision;
 use Sapl\Pep\Absent;
 use Sapl\Pep\Constraints\EnforcementPlan;
 use Sapl\Pep\EnforcementResult;
@@ -268,7 +269,7 @@ final class MealyMachineInvariantTest extends TestCase
 
     private static function pdpSuspend(): PdpSuspend
     {
-        return new PdpSuspend(AuthorizationDecision::permit(), EnforcementPlan::empty());
+        return new PdpSuspend(new AuthorizationDecision(Decision::SUSPEND), EnforcementPlan::empty());
     }
 
     private static function pdpDeny(): PdpDeny

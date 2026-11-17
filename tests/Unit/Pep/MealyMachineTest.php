@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Sapl\Api\AuthorizationDecision;
+use Sapl\Api\Decision;
 use Sapl\Pep\Absent;
 use Sapl\Pep\Constraints\EnforcementPlan;
 use Sapl\Pep\EnforcementResult;
@@ -39,62 +40,53 @@ use Sapl\Pep\Streaming\Terminated;
 final class MealyMachineTest extends TestCase
 {
     /**
-     * The full transition table: (state, event) to (expected state class, emission tags).
+     * The shared five-language transition table: exact next state and ordered emission tags.
      *
      * @return iterable<string, array{State, Event, class-string<State>, list<string>}>
      */
     public static function table(): iterable
     {
-        $states = [
-            'pending' => static fn (): State => Pending::instance(),
-            'permitting' => static fn (): State => new Permitting(EnforcementPlan::empty()),
-            'suspended' => static fn (): State => Suspended::instance(),
-        ];
-        // Per state: event label => [event factory, expected state, tags].
-        $cells = [
-            'pending' => [
-                'permit' => [self::permit(), Permitting::class, ['granted']],
-                'suspend' => [self::suspend(), Suspended::class, ['suspended']],
-                'deny' => [self::deny(), Terminated::class, ['error']],
-                'pdpError' => [new PdpError(new RuntimeException('x')), Terminated::class, ['error']],
-                'itemPresent' => [self::rapPresent('v'), Pending::class, []],
-                'itemAbsent' => [self::rapAbsent(), Pending::class, []],
-                'itemFailed' => [self::rapFailed(), Terminated::class, ['error']],
-                'rapError' => [new RapError(new RuntimeException('x')), Terminated::class, ['error']],
-                'rapComplete' => [RapComplete::instance(), Terminated::class, ['complete']],
-                'cancel' => [Cancel::instance(), Terminated::class, []],
-            ],
-            'permitting' => [
-                'permit' => [self::permit(), Permitting::class, []],
-                'suspend' => [self::suspend(), Suspended::class, ['suspended']],
-                'deny' => [self::deny(), Terminated::class, ['error']],
-                'pdpError' => [new PdpError(new RuntimeException('x')), Terminated::class, ['error']],
-                'itemPresent' => [self::rapPresent('v'), Permitting::class, ['emit']],
-                'itemAbsent' => [self::rapAbsent(), Permitting::class, []],
-                'itemFailed' => [self::rapFailed(), Terminated::class, ['error']],
-                'rapError' => [new RapError(new RuntimeException('x')), Terminated::class, ['error']],
-                'rapComplete' => [RapComplete::instance(), Terminated::class, ['complete']],
-                'cancel' => [Cancel::instance(), Terminated::class, []],
-            ],
-            'suspended' => [
-                'permit' => [self::permit(), Permitting::class, ['granted']],
-                'suspend' => [self::suspend(), Suspended::class, []],
-                'deny' => [self::deny(), Terminated::class, ['error']],
-                'pdpError' => [new PdpError(new RuntimeException('x')), Terminated::class, ['error']],
-                'itemPresent' => [self::rapPresent('v'), Suspended::class, []],
-                'itemAbsent' => [self::rapAbsent(), Suspended::class, []],
-                'itemFailed' => [self::rapFailed(), Terminated::class, ['error']],
-                'rapError' => [new RapError(new RuntimeException('x')), Terminated::class, ['error']],
-                'rapComplete' => [RapComplete::instance(), Terminated::class, ['complete']],
-                'cancel' => [Cancel::instance(), Terminated::class, []],
-            ],
-        ];
+        $lines = file(__DIR__.'/mealy-table.csv', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (false === $lines || 'from,event,outcome,to,emissions' !== array_shift($lines)) {
+            throw new RuntimeException('Unexpected Mealy table header.');
+        }
+        foreach ($lines as $line) {
+            $columns = explode(',', $line);
+            if (5 !== count($columns)) {
+                throw new RuntimeException('Expected five Mealy table columns.');
+            }
+            [$from, $event, $outcome, $to, $emissions] = $columns;
+            yield "{$from}/{$event}/{$outcome}" => [
+                self::stateByName($from),
+                self::eventByName($event, $outcome),
+                self::stateByName($to)::class,
+                '' === $emissions ? [] : explode('|', $emissions),
+            ];
+        }
+    }
 
-        foreach ($cells as $stateLabel => $events) {
-            foreach ($events as $eventLabel => [$event, $expectedState, $tags]) {
-                yield "{$stateLabel}/{$eventLabel}" => [$states[$stateLabel](), $event, $expectedState, $tags];
+    public function testTableCoversEveryStateAndEventOutcomeExactlyOnce(): void
+    {
+        $states = ['Pending', 'Permitting', 'Suspended', 'Terminated'];
+        $events = [
+            'PdpPermit/', 'PdpSuspend/', 'PdpDeny/', 'PdpError/',
+            'RapItem/Present', 'RapItem/Absent', 'RapItem/Failed',
+            'RapError/', 'RapComplete/', 'Cancel/',
+        ];
+        $expected = [];
+        foreach ($states as $state) {
+            foreach ($events as $event) {
+                $expected[] = "{$state}/{$event}";
             }
         }
+        $actual = [];
+        foreach (self::table() as $key => $row) {
+            $actual[] = $key;
+        }
+        sort($expected);
+        sort($actual);
+
+        self::assertSame($expected, $actual);
     }
 
     /**
@@ -175,12 +167,41 @@ final class MealyMachineTest extends TestCase
     private function tags(StepResult $result): array
     {
         return array_map(static fn (object $emission): string => match (true) {
-            $emission instanceof Emit => 'emit',
-            $emission instanceof EmitError => 'error',
-            $emission instanceof EmitComplete => 'complete',
-            $emission instanceof EmitTransition => $emission->reason instanceof Granted ? 'granted' : 'suspended',
-            default => 'unknown',
+            $emission instanceof Emit => 'EMIT_VALUE',
+            $emission instanceof EmitError => 'EMIT_ERROR',
+            $emission instanceof EmitComplete => 'EMIT_COMPLETE',
+            $emission instanceof EmitTransition && $emission->reason instanceof Granted => 'EMIT_TRANSITION_GRANTED',
+            $emission instanceof EmitTransition && $emission->reason instanceof SuspendedReason => 'EMIT_TRANSITION_SUSPENDED',
+            default => throw new RuntimeException('Unknown Mealy emission.'),
         }, $result->emissions);
+    }
+
+    private static function stateByName(string $name): State
+    {
+        return match ($name) {
+            'Pending' => Pending::instance(),
+            'Permitting' => new Permitting(EnforcementPlan::empty()),
+            'Suspended' => Suspended::instance(),
+            'Terminated' => Terminated::instance(),
+            default => throw new RuntimeException('Unknown Mealy state: '.$name),
+        };
+    }
+
+    private static function eventByName(string $name, string $outcome): Event
+    {
+        return match ([$name, $outcome]) {
+            ['PdpPermit', ''] => self::permit(),
+            ['PdpSuspend', ''] => self::suspend(),
+            ['PdpDeny', ''] => self::deny(),
+            ['PdpError', ''] => new PdpError(new RuntimeException('pdp')),
+            ['RapItem', 'Present'] => self::rapPresent('mapped'),
+            ['RapItem', 'Absent'] => self::rapAbsent(),
+            ['RapItem', 'Failed'] => self::rapFailed(),
+            ['RapError', ''] => new RapError(new RuntimeException('rap')),
+            ['RapComplete', ''] => RapComplete::instance(),
+            ['Cancel', ''] => Cancel::instance(),
+            default => throw new RuntimeException('Unknown Mealy event/outcome: '.$name.'/'.$outcome),
+        };
     }
 
     private static function permit(): PdpPermit
@@ -190,7 +211,7 @@ final class MealyMachineTest extends TestCase
 
     private static function suspend(): PdpSuspend
     {
-        return new PdpSuspend(AuthorizationDecision::permit(), EnforcementPlan::empty());
+        return new PdpSuspend(new AuthorizationDecision(Decision::SUSPEND), EnforcementPlan::empty());
     }
 
     private static function deny(): PdpDeny
